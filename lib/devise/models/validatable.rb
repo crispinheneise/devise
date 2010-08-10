@@ -11,6 +11,7 @@ module Devise
                       :validates_confirmation_of, :validates_length_of ].freeze
 
       def self.included(base)
+        base.extend ClassMethods
         assert_validations_api!(base)
 
         base.class_eval do
@@ -33,6 +34,10 @@ module Devise
           raise "Could not use :validatable module since #{base} does not respond " <<
                 "to the following methods: #{unavailable_validations.to_sentence}."
         end
+      end
+      
+      module ClassMethods
+        Devise::Models.config(self, :password_length)
       end
     end
   end
