@@ -84,6 +84,10 @@ module Devise
   mattr_accessor :authentication_keys
   @@authentication_keys = [ :email ]
 
+  # Range validation for password length
+  mattr_accessor :password_length
+  @@password_length = 6..20
+
   # Time interval where the remember me token is valid.
   mattr_accessor :remember_for
   @@remember_for = 2.weeks
