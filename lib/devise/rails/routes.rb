@@ -91,6 +91,10 @@ module ActionDispatch::Routing
     #    Will use publisher/sessions controller instead of devise/sessions controller. You can revert
     #    this by providing the :module option to devise_for.
     #
+    #    Also pay attention that when you use a namespace it will affect all the helpers and methods for controllers
+    #    and views. For example, using the above setup you'll end with following methods: 
+    #    current_publisher_account, authenticate_publisher_account!, pusblisher_account_signed_in, etc.
+    #
     #  * :skip => tell which controller you want to skip routes from being created:
     #
     #      devise_for :users, :skip => :sessions
@@ -198,10 +202,10 @@ module ActionDispatch::Routing
     protected
 
       def devise_session(mapping, controllers) #:nodoc:
-        scope :controller => controllers[:sessions], :as => :session do
-          get   :new,     :path => mapping.path_names[:sign_in]
-          post  :create,  :path => mapping.path_names[:sign_in], :as => ""
-          match :destroy, :path => mapping.path_names[:sign_out], :via => mapping.sign_out_via
+        resource :session, :only => [], :controller => controllers[:sessions], :path => "" do
+          get   :new,     :path => mapping.path_names[:sign_in],  :as => "new"
+          post  :create,  :path => mapping.path_names[:sign_in]
+          match :destroy, :path => mapping.path_names[:sign_out], :as => "destroy", :via => mapping.sign_out_via
         end
       end
  
