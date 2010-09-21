@@ -39,6 +39,14 @@ class HttpAuthenticationTest < ActionController::IntegrationTest
     end
   end
 
+  test 'test request with oauth2 header doesnt get mistaken for basic authentication' do
+    swap Devise, :http_authenticatable => true do
+      add_oauth2_header
+      assert_equal 401, status
+      assert_equal 'Basic realm="Application"', headers["WWW-Authenticate"]
+    end
+  end
+
   private
 
     def sign_in_as_new_user_with_http(username="user@test.com", password="123456")
@@ -46,4 +54,11 @@ class HttpAuthenticationTest < ActionController::IntegrationTest
       get users_path(:format => :xml), {}, "HTTP_AUTHORIZATION" => "Basic #{ActiveSupport::Base64.encode64("#{username}:#{password}")}"
       user
     end
+    
+    # Sign in with oauth2 token. This is just to test that it isn't misinterpreted as basic authentication
+    def add_oauth2_header
+      user = create_user
+      get users_path(:format => :xml), {}, "HTTP_AUTHORIZATION" => "OAuth #{ActiveSupport::Base64.encode64("#{user.email}:123456")}"
+    end
+
 end
