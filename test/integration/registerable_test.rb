@@ -13,7 +13,7 @@ class RegistrationTest < ActionController::IntegrationTest
     fill_in 'password confirmation', :with => 'new_user123'
     click_button 'Sign up'
 
-    assert_contain 'You have signed up successfully.'
+    assert_contain 'Welcome! You have signed up successfully.'
     assert warden.authenticated?(:admin)
 
     admin = Admin.last :order => "id"
@@ -28,8 +28,7 @@ class RegistrationTest < ActionController::IntegrationTest
     fill_in 'password confirmation', :with => 'new_user123'
     click_button 'Sign up'
 
-    assert_contain 'You have signed up successfully'
-    assert_contain 'Sign in'
+    assert_contain 'You have signed up successfully. However, we could not sign you in because your account is unconfirmed.'
     assert_not_contain 'You have to confirm your account before continuing'
 
     assert_not warden.authenticated?(:user)
@@ -51,6 +50,7 @@ class RegistrationTest < ActionController::IntegrationTest
     assert_have_selector '#error_explanation'
     assert_contain "Email is invalid"
     assert_contain "Password doesn't match confirmation"
+    assert_contain "2 errors prohibited"
     assert_nil User.first
 
     assert_not warden.authenticated?(:user)
@@ -66,7 +66,7 @@ class RegistrationTest < ActionController::IntegrationTest
     click_button 'Sign up'
 
     assert_current_url '/users'
-    assert_contain(/Email .* already .* taken/)
+    assert_contain(/Email.*already.*taken/)
 
     assert_not warden.authenticated?(:user)
   end
@@ -96,6 +96,20 @@ class RegistrationTest < ActionController::IntegrationTest
     assert_contain 'You updated your account successfully.'
 
     assert_equal "user.new@email.com", User.first.email
+  end
+
+  test 'a signed in user should still be able to use the website after changing his password' do
+    sign_in_as_user
+    get edit_user_registration_path
+
+    fill_in 'password', :with => '12345678'
+    fill_in 'password confirmation', :with => '12345678'
+    fill_in 'current password', :with => '123456'
+    click_button 'Update'
+
+    assert_contain 'You updated your account successfully.'
+    get users_path
+    assert warden.authenticated?(:user)
   end
 
   test 'a signed in user should not change his current user with invalid password' do
@@ -153,13 +167,13 @@ class RegistrationTest < ActionController::IntegrationTest
 
   test 'a user should be able to cancel sign up by deleting data in the session' do
     get "/set"
-    assert_equal "something", @request.session["user_provider_oauth_token"]
+    assert_equal "something", @request.session["devise.foo_bar"]
 
     get "/users/sign_up"
-    assert_equal "something", @request.session["user_provider_oauth_token"]
+    assert_equal "something", @request.session["devise.foo_bar"]
 
     get "/users/cancel"
-    assert_nil @request.session["user_provider_oauth_token"]
+    assert_nil @request.session["devise.foo_bar"]
     assert_redirected_to new_user_registration_path
   end
 end

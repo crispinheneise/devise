@@ -12,9 +12,19 @@ class MappingTest < ActiveSupport::TestCase
     mapping = Devise.mappings[:user]
     assert_equal User,                mapping.to
     assert_equal User.devise_modules, mapping.modules
-    assert_equal :users,              mapping.plural
+    assert_equal "users",             mapping.scoped_path
     assert_equal :user,               mapping.singular
     assert_equal "users",             mapping.path
+    assert_equal "/users",            mapping.fullpath
+  end
+
+  test 'store options with namespace' do
+    mapping = Devise.mappings[:publisher_account]
+    assert_equal Admin,                 mapping.to
+    assert_equal "publisher/accounts",  mapping.scoped_path
+    assert_equal :publisher_account,    mapping.singular
+    assert_equal "accounts",            mapping.path
+    assert_equal "/publisher/accounts", mapping.fullpath
   end
 
   test 'allows path to be given' do
@@ -37,7 +47,7 @@ class MappingTest < ActiveSupport::TestCase
 
   test 'has strategies depending on the model declaration' do
     assert_equal [:rememberable, :token_authenticatable, :database_authenticatable], Devise.mappings[:user].strategies
-    assert_equal [:database_authenticatable], Devise.mappings[:admin].strategies
+    assert_equal [:rememberable, :database_authenticatable], Devise.mappings[:admin].strategies
   end
 
   test 'find scope for a given object' do
@@ -90,6 +100,20 @@ class MappingTest < ActiveSupport::TestCase
     assert mapping.recoverable?
     assert mapping.lockable?
     assert_not mapping.confirmable?
-    assert_not mapping.rememberable?
+    assert_not mapping.omniauthable?
   end
+  
+  test 'find mapping by path' do
+    assert_raise RuntimeError do
+      Devise::Mapping.find_by_path!('/accounts/facebook/callback')
+    end
+    
+    assert_nothing_raised do
+      Devise::Mapping.find_by_path!('/:locale/accounts/login')
+    end
+
+    assert_nothing_raised do
+      Devise::Mapping.find_by_path!('/accounts/facebook/callback', :path)
+    end
+  end  
 end

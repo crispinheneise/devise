@@ -8,7 +8,7 @@ Rails.application.routes.draw do
   resources :admins, :only => [:index]
 
   # Users scope
-  devise_for :users do
+  devise_for :users, :controllers => { :omniauth_callbacks => "users/omniauth_callbacks" } do
     match "/devise_for/sign_in", :to => "devise/sessions#new"
   end
 
@@ -19,7 +19,7 @@ Rails.application.routes.draw do
   match "/sign_in", :to => "devise/sessions#new"
 
   # Admin scope
-  devise_for :admin, :path => "admin_area", :controllers => { :sessions => "sessions" }, :skip => :passwords
+  devise_for :admin, :path => "admin_area", :controllers => { :sessions => "admins/sessions" }, :skip => :passwords
 
   match "/admin_area/home", :to => "admins#index", :as => :admin_root
   match "/anywhere", :to => "foo#bar", :as => :new_admin_password
@@ -29,12 +29,12 @@ Rails.application.routes.draw do
   end
 
   # Other routes for routing_test.rb
-  namespace :publisher, :path_names => { :sign_in => "i_don_care", :sign_out => "get_out" } do
-    devise_for :accounts, :class_name => "User", :path_names => { :sign_in => "get_in" }
+  namespace :publisher, :path_names => { :sign_in => "i_dont_care", :sign_out => "get_out" } do
+    devise_for :accounts, :class_name => "Admin", :path_names => { :sign_in => "get_in" }
   end
 
   scope ":locale" do
-    devise_for :accounts, :singular => "manager", :class_name => "User",
+    devise_for :accounts, :singular => "manager", :class_name => "Admin",
       :path_names => {
         :sign_in => "login", :sign_out => "logout",
         :password => "secret", :confirmation => "verification",
@@ -43,12 +43,13 @@ Rails.application.routes.draw do
       }
   end
 
-  namespace :sign_out_via do
-    devise_for :deletes, :sign_out_via => :delete, :class_name => "User", :controllers => { :sessions => "sessions" }
-    devise_for :posts, :sign_out_via => :post, :class_name => "User", :controllers => { :sessions => "sessions" }
-    devise_for :delete_or_posts, :sign_out_via => [:delete, :post], :class_name => "User", :controllers => { :sessions => "sessions" }
+  namespace :sign_out_via, :module => "devise" do
+    devise_for :deletes, :sign_out_via => :delete, :class_name => "Admin"
+    devise_for :posts, :sign_out_via => :post, :class_name => "Admin"
+    devise_for :delete_or_posts, :sign_out_via => [:delete, :post], :class_name => "Admin"
   end
 
   match "/set", :to => "home#set"
+  match "/unauthenticated", :to => "home#unauthenticated"
   root :to => "home#index"
 end

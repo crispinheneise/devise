@@ -15,7 +15,9 @@ class CreateTables < ActiveRecord::Migration
     end
 
     create_table :admins do |t|
-      t.database_authenticatable :null => true, :encryptor => :bcrypt
+      t.database_authenticatable :null => true
+      t.encryptable
+      t.rememberable :use_salt => false
       t.recoverable
       t.lockable
       t.timestamps

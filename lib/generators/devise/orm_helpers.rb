@@ -4,7 +4,7 @@ module Devise
       def model_contents
 <<-CONTENT
   # Include default devise modules. Others available are:
-  # :token_authenticatable, :confirmable, :lockable, :timeoutable and :oauthable
+  # :token_authenticatable, :encryptable, :confirmable, :lockable, :timeoutable and :omniauthable
   devise :database_authenticatable, :registerable,
          :recoverable, :rememberable, :trackable, :validatable
 
@@ -12,7 +12,8 @@ CONTENT
       end
 
       def model_exists?
-        File.exists?(File.join(destination_root, model_path))
+        return @model_exists if instance_variable_defined?(:@model_exists)
+        @model_exists = File.exists?(File.join(destination_root, model_path))
       end
 
       def model_path

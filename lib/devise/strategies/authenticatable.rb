@@ -96,20 +96,47 @@ module Devise
 
       # Helper to decode credentials from HTTP.
       def decode_credentials
-        return [] unless request.authorization && request.authorization =~ /^Basic (.*)/
+        return [] unless request.authorization && request.authorization =~ /^Basic (.*)/m
         ActiveSupport::Base64.decode64($1).split(/:/, 2)
       end
 
       # Sets the authentication hash and the password from params_auth_hash or http_auth_hash.
-      def with_authentication_hash(hash)
-        self.authentication_hash = hash.slice(*authentication_keys)
-        self.password = hash[:password]
-        authentication_keys.all?{ |k| authentication_hash[k].present? }
+      def with_authentication_hash(auth_values)
+        self.authentication_hash = {}
+        self.password = auth_values[:password]
+
+        parse_authentication_key_values(auth_values, authentication_keys) &&
+        parse_authentication_key_values(request_values, request_keys)
       end
 
       # Holds the authentication keys.
       def authentication_keys
         @authentication_keys ||= mapping.to.authentication_keys
+      end
+
+      # Holds request keys.
+      def request_keys
+        @request_keys ||= mapping.to.request_keys
+      end
+
+      # Returns values from the request object.
+      def request_values
+        keys = request_keys.respond_to?(:keys) ? request_keys.keys : request_keys
+        values = keys.map { |k| self.request.send(k) }
+        Hash[keys.zip(values)]
+      end
+
+      # Parse authentication keys considering if they should be enforced or not.
+      def parse_authentication_key_values(hash, keys)
+        keys.each do |key, enforce|
+          value = hash[key].presence
+          if value
+            self.authentication_hash[key] = value
+          else
+            return false unless enforce == false
+          end
+        end
+        true
       end
 
       # Holds the authenticatable name for this class. Devise::Strategies::DatabaseAuthenticatable

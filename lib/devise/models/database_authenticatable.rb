@@ -1,4 +1,5 @@
 require 'devise/strategies/database_authenticatable'
+require 'bcrypt'
 
 module Devise
   module Models
@@ -9,14 +10,7 @@ module Devise
     #
     # DatabaseAuthenticable adds the following options to devise_for:
     #
-    #   * +pepper+: encryption key used for creating encrypted password. Each time
-    #     password changes, it's gonna be encrypted again, and this key is added
-    #     to the password and salt to create a secure hash. Always use `rake secret'
-    #     to generate a new key.
-    #
-    #   * +stretches+: defines how many times the password will be encrypted.
-    #
-    #   * +encryptor+: the encryptor going to be used. By default :sha1.
+    #   * +stretches+: the cost given to bcrypt.
     #
     # == Examples
     #
@@ -28,22 +22,18 @@ module Devise
       included do
         attr_reader :password, :current_password
         attr_accessor :password_confirmation
+        before_save :downcase_keys
       end
 
-      # Regenerates password salt and encrypted password each time password is set,
-      # and then trigger any "after_changed_password"-callbacks.
+      # Generates password encryption based on the given value.
       def password=(new_password)
         @password = new_password
-
-        if @password.present?
-          self.password_salt = self.class.password_salt
-          self.encrypted_password = password_digest(@password)
-        end
+        self.encrypted_password = password_digest(@password) if @password.present?
       end
 
       # Verifies whether an incoming_password (ie from sign in) is the user password.
-      def valid_password?(incoming_password)
-        password_digest(incoming_password) == self.encrypted_password
+      def valid_password?(password)
+        ::BCrypt::Password.new(self.encrypted_password) == "#{password}#{self.class.pepper}"
       end
 
       # Set password and password confirmation to nil
@@ -77,24 +67,25 @@ module Devise
       def after_database_authentication
       end
 
+      # A reliable way to expose the salt regardless of the implementation.
+      def authenticatable_salt
+        self.encrypted_password[0,29] if self.encrypted_password
+      end
+
     protected
 
-      # Digests the password using the configured encryptor.
+      # Downcase case-insensitive keys
+      def downcase_keys
+        self.class.case_insensitive_keys.each { |k| self[k].try(:downcase!) }
+      end
+
+      # Digests the password using bcrypt.
       def password_digest(password)
-        self.class.encryptor_class.digest(password, self.class.stretches, self.password_salt, self.class.pepper)
+        ::BCrypt::Password.create("#{password}#{self.class.pepper}", :cost => self.class.stretches).to_s
       end
 
       module ClassMethods
-        Devise::Models.config(self, :pepper, :stretches, :encryptor)
-
-        # Returns the class for the configured encryptor.
-        def encryptor_class
-          @encryptor_class ||= ::Devise::Encryptors.const_get(encryptor.to_s.classify)
-        end
-
-        def password_salt
-          self.encryptor_class.salt(self.stretches)
-        end
+        Devise::Models.config(self, :pepper, :stretches)
 
         # We assume this method already gets the sanitized values from the
         # DatabaseAuthenticatable strategy. If you are using this method on

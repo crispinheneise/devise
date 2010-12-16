@@ -22,8 +22,9 @@ module Devise
         assert_validations_api!(base)
 
         base.class_eval do
-          validates_presence_of   :email
-          validates_uniqueness_of :email, :scope => authentication_keys[1..-1], :case_sensitive => false, :allow_blank => true
+          validates_presence_of   :email, :if => :email_required?
+          validates_uniqueness_of :email, :scope => authentication_keys[1..-1],
+            :case_sensitive => case_insensitive_keys.exclude?(:email), :allow_blank => true
           validates_format_of     :email, :with  => email_regexp, :allow_blank => true
 
           with_options :if => :password_required? do |v|
@@ -50,6 +51,10 @@ module Devise
       # or confirmation are being set somewhere.
       def password_required?
         !persisted? || !password.blank? || !password_confirmation.blank?
+      end
+
+      def email_required?
+        true
       end
 
       module ClassMethods

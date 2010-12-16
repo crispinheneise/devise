@@ -41,12 +41,12 @@ module Devise
     def recall
       env["PATH_INFO"]  = attempted_path
       flash.now[:alert] = i18n_message(:invalid)
-      self.response = recall_controller.action(warden_options[:recall]).call(env)
+      self.response = recall_app(warden_options[:recall]).call(env)
     end
 
     def redirect
       store_location!
-      flash[:alert] = i18n_message unless flash[:notice]
+      flash[:alert] = i18n_message
       redirect_to redirect_url
     end
 
@@ -79,7 +79,7 @@ module Devise
       if request.xhr?
         Devise.http_authenticatable_on_xhr
       else
-        !Devise.navigational_formats.include?(request.format.to_sym)
+        !(request.format && Devise.navigational_formats.include?(request.format.to_sym))
       end
     end
 
@@ -90,12 +90,14 @@ module Devise
     end
 
     def http_auth_body
-      method = :"to_#{request.format.to_sym}"
+      return i18n_message unless request.format
+      method = "to_#{request.format.to_sym}"
       {}.respond_to?(method) ? { :error => i18n_message }.send(method) : i18n_message
     end
 
-    def recall_controller
-      "#{params[:controller].camelize}Controller".constantize
+    def recall_app(app)
+      controller, action = app.split("#")
+      "#{controller.camelize}Controller".constantize.action(action)
     end
 
     def warden

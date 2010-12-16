@@ -245,6 +245,17 @@ class AuthenticationSessionTest < ActionController::IntegrationTest
       ActiveSupport::Dependencies.autoload_paths.replace(paths)
     end
   end
+
+  test 'session id is changed on sign in' do
+    get '/users'
+    session_id = request.session["session_id"]
+
+    get '/users'
+    assert_equal session_id, request.session["session_id"]
+
+    sign_in_as_user
+    assert_not_equal session_id, request.session["session_id"]
+  end
 end
 
 class AuthenticationWithScopesTest < ActionController::IntegrationTest
@@ -292,13 +303,18 @@ class AuthenticationOthersTest < ActionController::IntegrationTest
   test 'uses the custom controller with the custom controller view' do
     get '/admin_area/sign_in'
     assert_contain 'Sign in'
-    assert_contain 'Welcome to "sessions" controller!'
+    assert_contain 'Welcome to "admins/sessions" controller!'
     assert_contain 'Welcome to "sessions/new" view!'
   end
 
   test 'render 404 on roles without routes' do
     get '/admin_area/password/new'
     assert_equal 404, response.status
+  end
+
+  test 'does not intercept Rails 401 responses' do
+    get '/unauthenticated'
+    assert_equal 401, response.status
   end
 
   test 'render 404 on roles without mapping' do
@@ -333,9 +349,50 @@ class AuthenticationOthersTest < ActionController::IntegrationTest
   end
 end
 
+class AuthenticationRequestKeysTest < ActionController::IntegrationTest
+  test 'request keys are used on authentication' do
+    host! 'foo.bar.baz'
+
+    swap Devise, :request_keys => [:subdomain] do
+      User.expects(:find_for_authentication).with(:subdomain => 'foo', :email => 'user@test.com').returns(create_user)
+      sign_in_as_user
+      assert warden.authenticated?(:user)
+    end
+  end
+
+  test 'invalid request keys raises NoMethodError' do
+    swap Devise, :request_keys => [:unknown_method] do
+      assert_raise NoMethodError do
+        sign_in_as_user
+      end
+
+      assert_not warden.authenticated?(:user)
+    end
+  end
+
+  test 'blank request keys cause authentication to abort' do
+    host! 'test.com'
+
+    swap Devise, :request_keys => [:subdomain] do
+      sign_in_as_user
+      assert_contain "Invalid email or password."
+      assert_not warden.authenticated?(:user)
+    end
+  end
+
+  test 'blank request keys cause authentication to abort unless if marked as not required' do
+    host! 'test.com'
+
+    swap Devise, :request_keys => { :subdomain => false } do
+      sign_in_as_user
+      assert warden.authenticated?(:user)
+    end
+  end
+end
+
 class AuthenticationSignOutViaTest < ActionController::IntegrationTest
   def sign_in!(scope)
-    sign_in_as_user(:visit => send("new_#{scope}_session_path"))
+    sign_in_as_admin(:visit => send("new_#{scope}_session_path"))
     assert warden.authenticated?(scope)
   end
 

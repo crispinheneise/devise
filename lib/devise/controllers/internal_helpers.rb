@@ -54,7 +54,7 @@ module Devise
 
       # Checks whether it's a devise mapped resource or not.
       def is_devise_resource? #:nodoc:
-        unknown_action!("Could not find devise mapping for #{request.fullpath}.") unless devise_mapping
+        unknown_action!("Could not find devise mapping for path #{request.fullpath.inspect}") unless devise_mapping
       end
 
       def unknown_action!(msg)
@@ -102,7 +102,8 @@ module Devise
         options[:scope] = "devise.#{controller_name}"
         options[:default] = Array(options[:default]).unshift(kind.to_sym)
         options[:resource_name] = resource_name
-        flash[key] = I18n.t("#{resource_name}.#{kind}", options)
+        message = I18n.t("#{resource_name}.#{kind}", options)
+        flash[key] = message if message.present?
       end
 
       def clean_up_passwords(object) #:nodoc:

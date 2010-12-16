@@ -65,40 +65,54 @@ module Devise
 
       # Return true if it's a devise_controller. false to all controllers unless
       # the controllers defined inside devise. Useful if you want to apply a before
-      # filter to all controller, except the ones in devise:
+      # filter to all controllers, except the ones in devise:
       #
       #   before_filter :my_filter, :unless => { |c| c.devise_controller? }
       def devise_controller?
         false
       end
 
-      # Check if the given scope is signed in session, without running
-      # authentication hooks.
-      def signed_in?(scope)
-        warden.authenticate?(:scope => scope)
+      # Return true if the given scope is signed in session. If no scope given, return
+      # true if any scope is signed in. Does not run authentication hooks.
+      def signed_in?(scope=nil)
+        [ scope || Devise.mappings.keys ].flatten.any? do |scope| 
+          warden.authenticate?(:scope => scope)
+        end
       end
 
-      # Check if the any scope is signed in session, without running
-      # authentication hooks.
       def anybody_signed_in?
-        Devise.mappings.keys.any? { |scope| signed_in?(scope) }
+        ActiveSupport::Deprecation.warn "Devise#anybody_signed_in? is deprecated. "
+          "Please use Devise#signed_in?(nil) instead."
+        signed_in?
       end
 
       # Sign in an user that already was authenticated. This helper is useful for logging
       # users in after sign up.
+      #
+      # All options given to sign_in is passed forward to the set_user method in warden.
+      # The only exception is the :bypass option, which bypass warden callbacks and stores
+      # the user straight in session. This option is useful in cases the user is already
+      # signed in, but we want to refresh the credentials in session.
       #
       # Examples:
       #
       #   sign_in :user, @user                      # sign_in(scope, resource)
       #   sign_in @user                             # sign_in(resource)
       #   sign_in @user, :event => :authentication  # sign_in(resource, options)
-      #
+      #   sign_in @user, :bypass => true            # sign_in(resource, options)
+      # 
       def sign_in(resource_or_scope, *args)
         options  = args.extract_options!
         scope    = Devise::Mapping.find_scope!(resource_or_scope)
         resource = args.last || resource_or_scope
+
         expire_session_data_after_sign_in!
-        warden.set_user(resource, options.merge!(:scope => scope))
+
+        if options[:bypass]
+          warden.session_serializer.store(resource, scope)
+        else
+          warden.set_user(resource, options.merge!(:scope => scope))
+        end
       end
 
       # Sign out a given user or scope. This helper is useful for signing out an user
@@ -109,7 +123,8 @@ module Devise
       #   sign_out :user     # sign_out(scope)
       #   sign_out @user     # sign_out(resource)
       #
-      def sign_out(resource_or_scope)
+      def sign_out(resource_or_scope=nil)
+        return sign_out_all_scopes unless resource_or_scope
         scope = Devise::Mapping.find_scope!(resource_or_scope)
         warden.user(scope) # Without loading user here, before_logout hook is not called
         warden.raw_session.inspect # Without this inspect here. The session does not clear.
@@ -117,13 +132,10 @@ module Devise
       end
 
       # Sign out all active users or scopes. This helper is useful for signing out all roles
-      # in one click.
+      # in one click. This signs out ALL scopes in warden.
       def sign_out_all_scopes
-        # Not "warden.logout" since we need to sign_out only devise-defined scopes.
-        scopes = Devise.mappings.keys
-        scopes.each { |scope| warden.user(scope) }
         warden.raw_session.inspect
-        warden.logout(*scopes)
+        warden.logout
       end
 
       # Returns and delete the url stored in the session for the given scope. Useful
@@ -135,7 +147,7 @@ module Devise
       #
       def stored_location_for(resource_or_scope)
         scope = Devise::Mapping.find_scope!(resource_or_scope)
-        session.delete(:"#{scope}_return_to")
+        session.delete("#{scope}_return_to")
       end
 
       # The default url to be used after signing in. This is used by all Devise
@@ -166,38 +178,8 @@ module Devise
       #
       def after_sign_in_path_for(resource_or_scope)
         scope = Devise::Mapping.find_scope!(resource_or_scope)
-        home_path = :"#{scope}_root_path"
+        home_path = "#{scope}_root_path"
         respond_to?(home_path, true) ? send(home_path) : root_path
-      end
-
-      # The default url to be used after updating a resource. This is used by all Devise
-      # controllers and you can overwrite it in your ApplicationController to
-      # provide a custom hook for a custom resource.
-      #
-      # By default, it first tries to find a resource_root_path, otherwise it
-      # uses the root path. For a user scope, you can define the default url in
-      # the following way:
-      #
-      #   map.user_root '/users', :controller => 'users' # creates user_root_path
-      #
-      #   map.resources :users do |users|
-      #     users.root # creates user_root_path
-      #   end
-      #
-      #
-      # If none of these are defined, root_path is used. However, if this default
-      # is not enough, you can customize it, for example:
-      #
-      #   def after_update_path_for(resource)
-      #     if resource.is_a?(User) && resource.can_publish?
-      #       publisher_url
-      #     else
-      #       super
-      #     end
-      #   end
-      #
-      def after_update_path_for(resource_or_scope)
-        after_sign_in_path_for(resource_or_scope)
       end
 
       # Method used by sessions controller to sign out an user. You can overwrite
@@ -217,7 +199,13 @@ module Devise
         options  = args.extract_options!
         scope    = Devise::Mapping.find_scope!(resource_or_scope)
         resource = args.last || resource_or_scope
-        sign_in(scope, resource, options) unless warden.user(scope) == resource
+
+        if warden.user(scope) == resource
+          expire_session_data_after_sign_in!
+        else
+          sign_in(scope, resource, options)
+        end
+
         redirect_for_sign_in(scope, resource)
       end
 
@@ -229,11 +217,7 @@ module Devise
       # after_sign_out_path_for.
       def sign_out_and_redirect(resource_or_scope)
         scope = Devise::Mapping.find_scope!(resource_or_scope)
-        if Devise.sign_out_all_scopes
-          sign_out_all_scopes
-        else
-          sign_out(scope)
-        end
+        Devise.sign_out_all_scopes ? sign_out : sign_out(scope)
         redirect_for_sign_out(scope)
       end
 
@@ -241,9 +225,10 @@ module Devise
         redirect_to after_sign_out_path_for(scope)
       end
 
-      # A hook called to expire session data after sign up/in. This is used
-      # by a few extensions, like oauth, to expire tokens stored in session.
+      # A hook called to expire session data after sign up/in. All keys
+      # stored under "devise." namespace are removed after sign in.
       def expire_session_data_after_sign_in!
+        session.keys.grep(/^devise\./).each { |k| session.delete(k) }
       end
     end
   end

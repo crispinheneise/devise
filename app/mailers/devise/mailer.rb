@@ -13,25 +13,24 @@ class Devise::Mailer < ::ActionMailer::Base
   def unlock_instructions(record)
     setup_mail(record, :unlock_instructions)
   end
-  
+
   private
-  
+
   # Configure default email options
   def setup_mail(record, action)
-    initialize_from_record record
-    
+    initialize_from_record(record)
     mail headers_for(action)
   end
-  
+
   def initialize_from_record(record)
     @scope_name = Devise::Mapping.find_scope!(record)
     @resource   = instance_variable_set("@#{devise_mapping.name}", record)
   end
-  
+
   def devise_mapping
     @devise_mapping ||= Devise.mappings[scope_name]
   end
-  
+
   def headers_for(action)
     headers = {
       :subject       => translate(devise_mapping, action),
@@ -39,11 +38,15 @@ class Devise::Mailer < ::ActionMailer::Base
       :to            => resource.email,
       :template_path => template_paths
     }
-    
+
     if resource.respond_to?(:headers_for)
       headers.merge!(resource.headers_for(action))
     end
-    
+
+    unless headers.key?(:reply_to)
+      headers[:reply_to] = headers[:from]
+    end
+
     headers
   end
 
@@ -57,7 +60,7 @@ class Devise::Mailer < ::ActionMailer::Base
 
   def template_paths
     template_path = [self.class.mailer_name]
-    template_path.unshift "#{@devise_mapping.plural}/mailer" if self.class.scoped_views?
+    template_path.unshift "#{@devise_mapping.scoped_path}/mailer" if self.class.scoped_views?
     template_path
   end
 

@@ -1,15 +1,59 @@
 * deprecations
-  * sign_out_all_scopes defaults to true as security measure
-  * http authenticatable is disabled by default
+  * Deprecated anybody_signed_in? in favor of signed_in? (by github.com/gavinhughes)
+
+== 1.2.rc
+
+* deprecations
+  * cookie_domain is deprecated in favor of cookie_options
+  * after_update_path_for can no longer be defined in ApplicationController
 
 * enhancements
-  * Added OAuth 2 support
+  * Added OmniAuth support
+  * Added ORM adapter to abstract ORM iteraction
   * sign_out_via is available in the router to configure the method used for sign out (by github.com/martinrehfeld)
   * Improved Ajax requests handling in failure app (by github.com/spastorino)
+  * Added request_keys to easily use request specific values (like subdomain) in authentication
+  * Increased the size of friendly_token to 60 characters (reduces the chances of a successful brute attack)
+  * Ensure the friendly token does not include "_" or "-" since some e-mails may not autolink it properly (by github.com/rymai)
+  * Extracted encryptors into :encryptable for better bcrypt support
+  * :rememberable is now able to use salt as token if no remember_token is provided
+  * Store the salt in session and expire the session if the user changes his password
+  * Allow :stateless_token to be set to true avoiding users to be stored in session through token authentication
+  * cookie_options uses session_options values by default
+  * Sign up now check if the user is active or not and redirect him accordingly setting the inactive_signed_up message
+  * Use ActiveModel#to_key instead of #id
+  * sign_out_all_scopes now destroys the whole session
+  * Added case_insensitive_keys that automatically downcases the given keys, by default downcases only e-mail (by github.com/adahl)
+
+* default behavior changes
+  * sign_out_all_scopes defaults to true as security measure
+  * http authenticatable is disabled by default
+  * Devise does not intercept 401 returned from applications
 
 * bugfix
   * after_sign_in_path_for always receives a resource
-	* Updated the views generator to respect the rails :template_engine option (by github.com/fredwu)
+  * Do not execute Warden::Callbacks on Devise::TestHelpers (by github.com/sgronblo)
+  * Password recovery and account unlocking takes into account authentication keys (by github.com/RStankov)
+  * FailureApp now properly handles nil request.format
+  * Fix a bug causing FailureApp to return with HTTP Auth Headers for IE7
+  * Ensure namespaces has proper scoped views
+  * Ensure Devise does not set empty flash messages (by github.com/sxross)
+
+== 1.1.4
+
+* bugfix
+  * Avoid session fixation attacks
+
+== 1.1.3
+
+* bugfix
+  * Add reply-to to e-mail headers by default
+  * Updated the views generator to respect the rails :template_engine option (by github.com/fredwu)
+  * Check the type of HTTP Authentication before using Basic headers
+  * Avoid invalid_salt errors by checking salt presence (by github.com/thibaudgg)
+  * Forget user deletes the right cookie before logout, not remembering the user anymore (by github.com/emtrane)
+  * Fix for failed first-ever logins on PostgreSQL where column default is nil (by github.com/bensie)
+  * :default options is now honored in migrations
 
 == 1.1.2
 

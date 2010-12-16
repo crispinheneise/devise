@@ -1,10 +1,11 @@
 require 'active_support/core_ext/numeric/time'
 require 'active_support/dependencies'
+require 'orm_adapter'
 require 'set'
 
 module Devise
   autoload :FailureApp, 'devise/failure_app'
-  autoload :Oauth, 'devise/oauth'
+  autoload :OmniAuth, 'devise/omniauth'
   autoload :PathChecker, 'devise/path_checker'
   autoload :Schema, 'devise/schema'
   autoload :TestHelpers, 'devise/test_helpers'
@@ -18,7 +19,6 @@ module Devise
 
   module Encryptors
     autoload :Base, 'devise/encryptors/base'
-    autoload :Bcrypt, 'devise/encryptors/bcrypt'
     autoload :AuthlogicSha512, 'devise/encryptors/authlogic_sha512'
     autoload :ClearanceSha1, 'devise/encryptors/clearance_sha1'
     autoload :RestfulAuthenticationSha1, 'devise/encryptors/restful_authentication_sha1'
@@ -48,25 +48,28 @@ module Devise
     :sha512 => 128,
     :clearance_sha1 => 40,
     :restful_authentication_sha1 => 40,
-    :authlogic_sha512 => 128,
-    :bcrypt => 60
+    :authlogic_sha512 => 128
   }
 
   # Custom domain for cookies. Not set by default
-  mattr_accessor :cookie_domain
-  @@cookie_domain = false
-
-  # Used to encrypt password. Please generate one with rake secret.
-  mattr_accessor :pepper
-  @@pepper = nil
+  mattr_accessor :cookie_options
+  @@cookie_options = {}
 
   # The number of times to encrypt password.
   mattr_accessor :stretches
   @@stretches = 10
 
-  # Keys used when authenticating an user.
+  # Keys used when authenticating a user.
   mattr_accessor :authentication_keys
   @@authentication_keys = [ :email ]
+
+  # Request keys used when authenticating a user.
+  mattr_accessor :request_keys
+  @@request_keys = []
+
+  # Keys that should be case-insensitive.
+  mattr_accessor :case_insensitive_keys
+  @@case_insensitive_keys = [ :email ]
 
   # If http authentication is enabled by default.
   mattr_accessor :http_authenticatable
@@ -86,7 +89,7 @@ module Devise
 
   # Email regex used to validate email formats. Adapted from authlogic.
   mattr_accessor :email_regexp
-  @@email_regexp = /^([\w\.%\+\-]+)@([\w\-]+\.)+([\w]{2,})$/i
+  @@email_regexp = /\A([\w\.%\+\-]+)@([\w\-]+\.)+([\w]{2,})\z/i
 
   # Range validation for password length
   mattr_accessor :password_length
@@ -104,6 +107,11 @@ module Devise
   mattr_accessor :extend_remember_period
   @@extend_remember_period = false
 
+  # If true, uses salt as remember token and does not create it in the database.
+  # By default is false for backwards compatibility.
+  mattr_accessor :use_salt_as_remember_token
+  @@use_salt_as_remember_token = false
+
   # Time interval you can access your account before confirming your account.
   mattr_accessor :confirm_within
   @@confirm_within = 0.days
@@ -112,9 +120,13 @@ module Devise
   mattr_accessor :timeout_in
   @@timeout_in = 30.minutes
 
+  # Used to encrypt password. Please generate one with rake secret.
+  mattr_accessor :pepper
+  @@pepper = nil
+
   # Used to define the password encryption algorithm.
   mattr_accessor :encryptor
-  @@encryptor = :bcrypt
+  @@encryptor = nil
 
   # Tells if devise should apply the schema in ORMs where devise declaration
   # and schema belongs to the same class (as Datamapper and Mongoid).
@@ -156,9 +168,13 @@ module Devise
   mattr_accessor :token_authentication_key
   @@token_authentication_key = :auth_token
 
+  # If true, authentication through token does not store user in session
+  mattr_accessor :stateless_token
+  @@stateless_token = false
+
   # Which formats should be treated as navigational.
   mattr_accessor :navigational_formats
-  @@navigational_formats = [:html]
+  @@navigational_formats = [:"*/*", :html]
 
   # When set to true, signing out an user signs out all other scopes.
   mattr_accessor :sign_out_all_scopes
@@ -168,28 +184,20 @@ module Devise
   mattr_accessor :sign_out_via
   @@sign_out_via = :get
 
-  # Oauth providers
-  mattr_accessor :oauth_providers
-  @@oauth_providers = []
-
   # PRIVATE CONFIGURATION
 
   # Store scopes mappings.
   mattr_reader :mappings
   @@mappings = ActiveSupport::OrderedHash.new
 
-  # Oauth configurations.
-  mattr_reader :oauth_configs
-  @@oauth_configs = ActiveSupport::OrderedHash.new
+  # Omniauth configurations.
+  mattr_reader :omniauth_configs
+  @@omniauth_configs = ActiveSupport::OrderedHash.new
 
   # Define a set of modules that are called when a mapping is added.
   mattr_reader :helpers
   @@helpers = Set.new
   @@helpers << Devise::Controllers::Helpers
-
-  # Define a set of modules that are called when a provider is added.
-  mattr_reader :oauth_helpers
-  @@oauth_helpers = Set.new
 
   # Private methods to interface with Warden.
   mattr_accessor :warden_config
@@ -200,6 +208,16 @@ module Devise
   # a fresh initializer with all configuration values.
   def self.setup
     yield self
+  end
+
+  def self.omniauth_providers
+    omniauth_configs.keys
+  end
+
+  def self.cookie_domain=(value)
+    ActiveSupport::Deprecation.warn "Devise.cookie_domain=(value) is deprecated. "
+      "Please use Devise.cookie_options = { :domain => value } instead."
+    self.cookie_options[:domain] = value
   end
 
   # Get the mailer class from the mailer reference object.
@@ -294,29 +312,19 @@ module Devise
     @@warden_config_block = block
   end
 
-  # Specify an oauth provider.
+  # Specify an omniauth provider.
   #
-  #   config.oauth :github, APP_ID, APP_SECRET,
-  #     :site              => 'https://github.com/',
-  #     :authorize_path    => '/login/oauth/authorize',
-  #     :access_token_path => '/login/oauth/access_token',
-  #     :scope             =>  %w(user public_repo)
+  #   config.omniauth :github, APP_ID, APP_SECRET
   #
-  def self.oauth(provider, *args)
-    @@helpers << Devise::Oauth::UrlHelpers
-    @@oauth_helpers << Devise::Oauth::InternalHelpers
-
-    @@oauth_providers << provider
-    @@oauth_providers.uniq!
-
-    @@oauth_helpers.each { |h| h.define_oauth_helpers(provider) }
-    @@oauth_configs[provider] = Devise::Oauth::Config.new(*args)
+  def self.omniauth(provider, *args)
+    @@helpers << Devise::OmniAuth::UrlHelpers
+    @@omniauth_configs[provider] = Devise::OmniAuth::Config.new(provider, args)
   end
 
   # Include helpers in the given scope to AC and AV.
   def self.include_helpers(scope)
     ActiveSupport.on_load(:action_controller) do
-      include scope::Helpers
+      include scope::Helpers if defined?(scope::Helpers)
       include scope::UrlHelpers
     end
 
@@ -325,12 +333,18 @@ module Devise
     end
   end
 
+  # Returns true if Rails version is bigger than 3.0.x
+  def self.rack_session?
+    Rails::VERSION::STRING[0,3] != "3.0"
+  end
+
   # A method used internally to setup warden manager from the Rails initialize
   # block.
   def self.configure_warden! #:nodoc:
     @@warden_configured ||= begin
       warden_config.failure_app   = Devise::FailureApp
       warden_config.default_scope = Devise.default_scope
+      warden_config.intercept_401 = false
 
       Devise.mappings.each_value do |mapping|
         warden_config.scope_defaults mapping.name, :strategies => mapping.strategies
@@ -343,7 +357,7 @@ module Devise
 
   # Generate a friendly string randomically to be used as token.
   def self.friendly_token
-    ActiveSupport::SecureRandom.base64(15).tr('+/=', '-_ ').strip.delete("\n")
+    ActiveSupport::SecureRandom.base64(44).tr('+/=', 'xyz')
   end
 end
 

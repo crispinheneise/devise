@@ -18,11 +18,15 @@ module Devise
 
       apply_devise_schema :email,              String, :null => null, :default => default
       apply_devise_schema :encrypted_password, String, :null => null, :default => default, :limit => 128
-      apply_devise_schema :password_salt,      String, :null => null, :default => default
-    end      
+    end
+
+    # Creates password salt for encryption support.
+    def encryptable
+      apply_devise_schema :password_salt, String
+    end
 
     # Creates authentication_token.
-    def token_authenticatable(options={})
+    def token_authenticatable
       apply_devise_schema :authentication_token, String
     end
 
@@ -39,8 +43,12 @@ module Devise
     end
 
     # Creates remember_token and remember_created_at.
-    def rememberable
-      apply_devise_schema :remember_token,      String
+    #
+    # == Options
+    # * :use_salt - When true, does not create a remember_token and use password_salt instead.
+    def rememberable(options={})
+      use_salt = options.fetch(:use_salt, Devise.use_salt_as_remember_token)
+      apply_devise_schema :remember_token,      String unless use_salt
       apply_devise_schema :remember_created_at, DateTime
     end
 

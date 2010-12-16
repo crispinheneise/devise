@@ -28,6 +28,11 @@ class FailureTest < ActiveSupport::TestCase
       assert_equal 302, @response.first
     end
 
+    test 'return 302 status for wildcard requests' do
+      call_failure 'action_dispatch.request.formats' => nil, 'HTTP_ACCEPT' => '*/*'
+      assert_equal 302, @response.first
+    end
+
     test 'return to the default redirect location' do
       call_failure
       assert_equal 'You need to sign in or sign up before continuing.', @request.flash[:alert]
@@ -69,6 +74,11 @@ class FailureTest < ActiveSupport::TestCase
   context 'For HTTP request' do
     test 'return 401 status' do
       call_failure('formats' => :xml)
+      assert_equal 401, @response.first
+    end
+
+    test 'return 401 status for unknown formats' do
+      call_failure 'formats' => []
       assert_equal 401, @response.first
     end
 
@@ -136,8 +146,7 @@ class FailureTest < ActiveSupport::TestCase
   context 'With recall' do
     test 'calls the original controller' do
       env = {
-        "action_dispatch.request.parameters" => { :controller => "devise/sessions" },
-        "warden.options" => { :recall => "new", :attempted_path => "/users/sign_in" },
+        "warden.options" => { :recall => "devise/sessions#new", :attempted_path => "/users/sign_in" },
         "devise.mapping" => Devise.mappings[:user],
         "warden" => stub_everything
       }

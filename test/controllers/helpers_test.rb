@@ -13,16 +13,16 @@ class ControllerAuthenticableTest < ActionController::TestCase
     assert_equal @mock_warden, @controller.warden
   end
 
-  test 'proxy signed_in? to authenticated' do
+  test 'proxy signed_in?(scope) to authenticate?' do
     @mock_warden.expects(:authenticate?).with(:scope => :my_scope)
     @controller.signed_in?(:my_scope)
   end
-
-  test 'proxy anybody_signed_in? to signed_in?' do
+  
+  test 'proxy signed_in?(nil) to authenticate?' do
     Devise.mappings.keys.each do |scope| # :user, :admin, :manager
-      @controller.expects(:signed_in?).with(scope)
+      @mock_warden.expects(:authenticate?).with(:scope => scope)
     end
-    @controller.anybody_signed_in?
+    @controller.signed_in?
   end
 
   test 'proxy current_user to authenticate with user scope' do
@@ -100,6 +100,13 @@ class ControllerAuthenticableTest < ActionController::TestCase
     @controller.sign_in(user)
   end
 
+  test 'sign in accepts bypass as option' do
+    user = User.new
+    @mock_warden.expects(:session_serializer).returns(serializer = mock())
+    serializer.expects(:store).with(user, :user)
+    @controller.sign_in(user, :bypass => true)
+  end
+
   test 'sign out proxy to logout on warden' do
     @mock_warden.expects(:user).with(:user).returns(true)
     @mock_warden.expects(:logout).with(:user).returns(true)
@@ -112,12 +119,13 @@ class ControllerAuthenticableTest < ActionController::TestCase
     @controller.sign_out(User.new)
   end
 
-  test 'sign out everybody proxy to logout on warden' do
-    Devise.mappings.keys.each { |scope|
-      @mock_warden.expects(:user).with(scope).returns(true)
-    }
+  test 'sign out without args proxy to sign out all scopes' do
+    @mock_warden.expects(:logout).with().returns(true)
+    @controller.sign_out
+  end
 
-    @mock_warden.expects(:logout).with(*Devise.mappings.keys).returns(true)
+  test 'sign out everybody proxy to logout on warden' do
+    @mock_warden.expects(:logout).with().returns(true)
     @controller.sign_out_all_scopes
   end
 
@@ -145,14 +153,6 @@ class ControllerAuthenticableTest < ActionController::TestCase
 
   test 'after sign in path defaults to the scoped root path' do
     assert_equal admin_root_path, @controller.after_sign_in_path_for(:admin)
-  end
-
-  test 'after update path defaults to root path if none by was specified for the given scope' do
-    assert_equal root_path, @controller.after_update_path_for(:user)
-  end
-
-  test 'after update path defaults to the scoped root path' do
-    assert_equal admin_root_path, @controller.after_update_path_for(:admin)
   end
 
   test 'after sign out path defaults to the root path' do
@@ -197,10 +197,7 @@ class ControllerAuthenticableTest < ActionController::TestCase
 
   test 'sign out and redirect uses the configured after sign out path when signing out all scopes' do
     swap Devise, :sign_out_all_scopes => true do
-      Devise.mappings.keys.each do |scope| # :user, :admin, :manager
-        @mock_warden.expects(:user).with(scope)
-      end
-      @mock_warden.expects(:logout).returns(true)
+      @mock_warden.expects(:logout).with().returns(true)
       @controller.expects(:redirect_to).with(admin_root_path)
       @controller.instance_eval "def after_sign_out_path_for(resource); admin_root_path; end"
       @controller.sign_out_and_redirect(:admin)

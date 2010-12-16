@@ -6,7 +6,11 @@ class HomeController < ApplicationController
   end
 
   def set
-    session["user_provider_oauth_token"] = "something"
+    session["devise.foo_bar"] = "something"
     head :ok
+  end
+
+  def unauthenticated
+    render :text => "unauthenticated", :status => :unauthorized
   end
 end
