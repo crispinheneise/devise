@@ -1,4 +1,6 @@
-require 'devise/strategies/base'
+# frozen_string_literal: true
+
+require 'devise/strategies/authenticatable'
 
 module Devise
   module Strategies
@@ -9,6 +11,7 @@ module Devise
     class Rememberable < Authenticatable
       # A valid strategy for rememberable needs a remember token in the cookies.
       def valid?
+        @remember_cookie = nil
         remember_cookie.present?
       end
 
@@ -18,32 +21,45 @@ module Devise
       def authenticate!
         resource = mapping.to.serialize_from_cookie(*remember_cookie)
 
-        if validate(resource)
-          success!(resource)
-        else
+        unless resource
           cookies.delete(remember_key)
-          pass
+          return pass
+        end
+
+        if validate(resource)
+          remember_me(resource) if extend_remember_me?(resource)
+          resource.after_remembered
+          success!(resource)
         end
       end
 
+      # No need to clean up the CSRF when using rememberable.
+      # In fact, cleaning it up here would be a bug because
+      # rememberable is triggered on GET requests which means
+      # we would render a page on first access with all csrf
+      # tokens expired.
+      def clean_up_csrf?
+        false
+      end
+
     private
+
+      def extend_remember_me?(resource)
+        resource.respond_to?(:extend_remember_period) && resource.extend_remember_period
+      end
 
       def remember_me?
         true
       end
 
       def remember_key
-        "remember_#{scope}_token"
+        mapping.to.rememberable_options.fetch(:key, "remember_#{scope}_token")
       end
 
-      def extend_remember_period?
-        mapping.to.extend_remember_period
-      end
-
-      # Accessor for remember cookie
       def remember_cookie
         @remember_cookie ||= cookies.signed[remember_key]
       end
+
     end
   end
 end

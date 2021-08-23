@@ -1,28 +1,26 @@
+# frozen_string_literal: true
+
 module Devise
   module OmniAuth
     module UrlHelpers
-      def self.define_helpers(mapping)
-        return unless mapping.omniauthable?
-
-        class_eval <<-URL_HELPERS, __FILE__, __LINE__ + 1
-          def #{mapping.name}_omniauth_authorize_path(provider, params = {})
-            if Devise.omniauth_configs[provider.to_sym]
-              "/#{mapping.path}/auth/\#{provider}\#{'?'+params.to_param if params.present?}"
-            else
-              raise ArgumentError, "Could not find omniauth provider \#{provider.inspect}"
-            end
-          end
-        URL_HELPERS
+      def omniauth_authorize_path(resource_or_scope, provider, *args)
+        scope = Devise::Mapping.find_scope!(resource_or_scope)
+        _devise_route_context.send("#{scope}_#{provider}_omniauth_authorize_path", *args)
       end
 
-      def omniauth_authorize_path(resource_or_scope, *args)
+      def omniauth_authorize_url(resource_or_scope, provider, *args)
         scope = Devise::Mapping.find_scope!(resource_or_scope)
-        send("#{scope}_omniauth_authorize_path", *args)
+        _devise_route_context.send("#{scope}_#{provider}_omniauth_authorize_url", *args)
       end
 
-      def omniauth_callback_path(resource_or_scope, *args)
+      def omniauth_callback_path(resource_or_scope, provider, *args)
         scope = Devise::Mapping.find_scope!(resource_or_scope)
-        send("#{scope}_omniauth_callback_path", *args)
+        _devise_route_context.send("#{scope}_#{provider}_omniauth_callback_path", *args)
+      end
+
+      def omniauth_callback_url(resource_or_scope, provider, *args)
+        scope = Devise::Mapping.find_scope!(resource_or_scope)
+        _devise_route_context.send("#{scope}_#{provider}_omniauth_callback_url", *args)
       end
     end
   end

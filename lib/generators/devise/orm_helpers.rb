@@ -1,18 +1,35 @@
+# frozen_string_literal: true
+
 module Devise
   module Generators
     module OrmHelpers
       def model_contents
-<<-CONTENT
+        buffer = <<-CONTENT
   # Include default devise modules. Others available are:
-  # :token_authenticatable, :encryptable, :confirmable, :lockable, :timeoutable and :omniauthable
+  # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
   devise :database_authenticatable, :registerable,
-         :recoverable, :rememberable, :trackable, :validatable
+         :recoverable, :rememberable, :validatable
 
 CONTENT
+        buffer
       end
 
+      private
+
       def model_exists?
-        File.exists?(File.join(destination_root, model_path))
+        File.exist?(File.join(destination_root, model_path))
+      end
+
+      def migration_exists?(table_name)
+        Dir.glob("#{File.join(destination_root, migration_path)}/[0-9]*_*.rb").grep(/\d+_add_devise_to_#{table_name}.rb$/).first
+      end
+
+      def migration_path
+        if Rails.version >= '5.0.3'
+          db_migrate_path
+        else
+          @migration_path ||= File.join("db", "migrate")
+        end
       end
 
       def model_path

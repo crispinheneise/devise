@@ -1,18 +1,20 @@
 # encoding: UTF-8
+# frozen_string_literal: true
 
-require 'rake'
+require 'bundler/gem_tasks'
 require 'rake/testtask'
-require 'rake/rdoctask'
-require File.join(File.dirname(__FILE__), 'lib', 'devise', 'version')
+require 'rdoc/task'
 
 desc 'Default: run tests for all ORMs.'
-task :default => :pre_commit
+task default: :test
 
 desc 'Run Devise tests for all ORMs.'
 task :pre_commit do
   Dir[File.join(File.dirname(__FILE__), 'test', 'orm', '*.rb')].each do |file|
     orm = File.basename(file).split(".").first
-    system "rake test DEVISE_ORM=#{orm}"
+    # "Some day, my son, rake's inner wisdom will reveal itself.  Until then,
+    # take this `system` -- may its brute force protect you well."
+    exit 1 unless system "rake test DEVISE_ORM=#{orm}"
   end
 end
 
@@ -22,6 +24,7 @@ Rake::TestTask.new(:test) do |t|
   t.libs << 'test'
   t.pattern = 'test/**/*_test.rb'
   t.verbose = true
+  t.warning = false
 end
 
 desc 'Generate documentation for Devise.'
@@ -29,6 +32,6 @@ Rake::RDocTask.new(:rdoc) do |rdoc|
   rdoc.rdoc_dir = 'rdoc'
   rdoc.title    = 'Devise'
   rdoc.options << '--line-numbers' << '--inline-source'
-  rdoc.rdoc_files.include('README.rdoc')
+  rdoc.rdoc_files.include('README.md')
   rdoc.rdoc_files.include('lib/**/*.rb')
 end

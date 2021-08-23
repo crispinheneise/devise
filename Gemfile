@@ -1,29 +1,38 @@
-source "http://rubygems.org"
+# frozen_string_literal: true
+
+source "https://rubygems.org"
 
 gemspec
 
-gem "rails", "~> 3.0.0"
-gem "oa-oauth", :require => "omniauth/oauth"
-gem "oa-openid", :require => "omniauth/openid"
+gem "rails", "~> 6.1.0"
+gem "omniauth"
+gem "omniauth-oauth2"
+gem "rdoc"
+
+gem "rails-controller-testing", github: "rails/rails-controller-testing"
+
+gem "responders", "~> 3.0"
 
 group :test do
-  gem "webrat", "0.7.2", :require => false
-  gem "mocha", :require => false
-end
-
-platforms :jruby do
-  gem 'activerecord-jdbcsqlite3-adapter'
+  gem "omniauth-facebook"
+  gem "omniauth-openid"
+  gem "rexml"
+  gem "timecop"
+  gem "webrat", "0.7.3", require: false
+  gem "mocha", "~> 1.1", require: false
 end
 
 platforms :ruby do
-  group :test do
-    gem "sqlite3-ruby"
-    gem "ruby-debug", ">= 0.10.3" if RUBY_VERSION < '1.9'
-  end
-
-  group :mongoid do
-    gem "mongo", "1.1.2"
-    gem "mongoid", "2.0.0.beta.20"
-    gem "bson_ext", "1.1.2"
-  end
+  gem "sqlite3", "~> 1.4"
 end
+
+# platforms :jruby do
+#   gem "activerecord-jdbc-adapter"
+#   gem "activerecord-jdbcsqlite3-adapter"
+#   gem "jruby-openssl"
+# end
+
+# TODO:
+# group :mongoid do
+#   gem "mongoid", "~> 4.0.0"
+# end

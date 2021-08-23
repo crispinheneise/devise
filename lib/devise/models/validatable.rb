@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 module Devise
   module Models
     # Validatable creates all needed validations for a user email and password.
     # It's optional, given you may want to create the validations by yourself.
-    # Automatically validate if the email is present, unique and it's format is
+    # Automatically validate if the email is present, unique and its format is
     # valid. Also tests presence of password, confirmation and length.
     #
     # == Options
@@ -10,28 +12,34 @@ module Devise
     # Validatable adds the following options to devise_for:
     #
     #   * +email_regexp+: the regular expression used to validate e-mails;
-    #   * +password_length+: a range expressing password length. Defaults to 6..20.
+    #   * +password_length+: a range expressing password length. Defaults to 6..128.
     #
     module Validatable
       # All validations used by this module.
-      VALIDATIONS = [ :validates_presence_of, :validates_uniqueness_of, :validates_format_of,
-                      :validates_confirmation_of, :validates_length_of ].freeze
+      VALIDATIONS = [:validates_presence_of, :validates_uniqueness_of, :validates_format_of,
+                     :validates_confirmation_of, :validates_length_of].freeze
+
+      def self.required_fields(klass)
+        []
+      end
 
       def self.included(base)
         base.extend ClassMethods
         assert_validations_api!(base)
 
         base.class_eval do
-          validates_presence_of   :email, :if => :email_required?
-          validates_uniqueness_of :email, :scope => authentication_keys[1..-1],
-            :case_sensitive => case_insensitive_keys.exclude?(:email), :allow_blank => true
-          validates_format_of     :email, :with  => email_regexp, :allow_blank => true
-
-          with_options :if => :password_required? do |v|
-            v.validates_presence_of     :password
-            v.validates_confirmation_of :password
-            v.validates_length_of       :password, :within => password_length, :allow_blank => true
+          validates_presence_of   :email, if: :email_required?
+          if Devise.activerecord51?
+            validates_uniqueness_of :email, allow_blank: true, case_sensitive: true, if: :will_save_change_to_email?
+            validates_format_of     :email, with: email_regexp, allow_blank: true, if: :will_save_change_to_email?
+          else
+            validates_uniqueness_of :email, allow_blank: true, if: :email_changed?
+            validates_format_of     :email, with: email_regexp, allow_blank: true, if: :email_changed?
           end
+
+          validates_presence_of     :password, if: :password_required?
+          validates_confirmation_of :password, if: :password_required?
+          validates_length_of       :password, within: password_length, allow_blank: true
         end
       end
 

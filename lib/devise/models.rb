@@ -1,8 +1,20 @@
+# frozen_string_literal: true
+
 module Devise
   module Models
+    class MissingAttribute < StandardError
+      def initialize(attributes)
+        @attributes = attributes
+      end
+
+      def message
+        "The following attribute(s) is (are) missing on your model: #{@attributes.join(", ")}"
+      end
+    end
+
     # Creates configuration values for Devise and for the given module.
     #
-    #   Devise::Models.config(Devise::Authenticable, :stretches, 10)
+    #   Devise::Models.config(Devise::Models::DatabaseAuthenticatable, :stretches)
     #
     # The line above creates:
     #
@@ -17,6 +29,9 @@ module Devise
     # inside the given class.
     #
     def self.config(mod, *accessors) #:nodoc:
+      class << mod; attr_accessor :available_configs; end
+      mod.available_configs = accessors
+
       accessors.each do |accessor|
         mod.class_eval <<-METHOD, __FILE__, __LINE__ + 1
           def #{accessor}
@@ -36,6 +51,23 @@ module Devise
       end
     end
 
+    def self.check_fields!(klass)
+      failed_attributes = []
+      instance = klass.new
+
+      klass.devise_modules.each do |mod|
+        constant = const_get(mod.to_s.classify)
+
+        constant.required_fields(klass).each do |field|
+          failed_attributes << field unless instance.respond_to?(field)
+        end
+      end
+
+      if failed_attributes.any?
+        fail Devise::Models::MissingAttribute.new(failed_attributes)
+      end
+    end
+
     # Include the chosen devise modules in your model:
     #
     #   devise :database_authenticatable, :confirmable, :recoverable
@@ -45,18 +77,41 @@ module Devise
     # for a complete description on those values.
     #
     def devise(*modules)
-      include Devise::Models::Authenticatable
-      options = modules.extract_options!
-      self.devise_modules += Devise::ALL & modules.map(&:to_sym).uniq
+      options = modules.extract_options!.dup
+
+      selected_modules = modules.map(&:to_sym).uniq.sort_by do |s|
+        Devise::ALL.index(s) || -1  # follow Devise::ALL order
+      end
 
       devise_modules_hook! do
-        devise_modules.each { |m| include Devise::Models.const_get(m.to_s.classify) }
+        include Devise::Models::Authenticatable
+
+        selected_modules.each do |m|
+          mod = Devise::Models.const_get(m.to_s.classify)
+
+          if mod.const_defined?("ClassMethods")
+            class_mod = mod.const_get("ClassMethods")
+            extend class_mod
+
+            if class_mod.respond_to?(:available_configs)
+              available_configs = class_mod.available_configs
+              available_configs.each do |config|
+                next unless options.key?(config)
+                send(:"#{config}=", options.delete(config))
+              end
+            end
+          end
+
+          include mod
+        end
+
+        self.devise_modules |= selected_modules
         options.each { |key, value| send(:"#{key}=", value) }
       end
     end
 
-    # The hook which is called inside devise. So your ORM can include devise
-    # compatibility stuff.
+    # The hook which is called inside devise.
+    # So your ORM can include devise compatibility stuff.
     def devise_modules_hook!
       yield
     end

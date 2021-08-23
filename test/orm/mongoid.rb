@@ -1,11 +1,15 @@
+# frozen_string_literal: true
+
+require 'mongoid/version'
+
 Mongoid.configure do |config|
-  config.master  = Mongo::Connection.new('127.0.0.1', 27017).db("devise-test-suite")
+  config.load!('test/support/mongoid.yml')
   config.use_utc = true
+  config.include_root_in_json = true
 end
 
 class ActiveSupport::TestCase
   setup do
-    User.delete_all
-    Admin.delete_all
+    Mongoid.default_session.drop
   end
 end
